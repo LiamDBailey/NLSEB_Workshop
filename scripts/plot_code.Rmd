@@ -1,0 +1,1187 @@
+---
+title: "NLSEB_Workshop"
+author: "Liam D. Bailey"
+date: '2022-06-26'
+output: html_document
+---
+
+## Intro
+
+This document contains code for generating all the plots used in the NLSEB workshop 'Storytelling with Data: An academic perspective'.
+
+### Load relevant packages
+
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2) #For plotting
+library(dplyr) #For data wrangling
+library(ggtext) #Used to add coloured text to our plot
+library(ggrepel) #Used to prevent overlaping text on a plot
+library(here) #Used to make all paths relative to my project folder
+library(showtext) #Used to apply custom fonts
+library(readr) #For reading in csv more efficiently
+library(gt) #For creating tables and heatmaps
+
+showtext_auto() #Active custom font package
+## THIS NEEDS INTERNET ACCESS
+font_add_google(name = "Quicksand", family = "Quicksand") #Load font Quicksand from Google fonts
+```
+## Storytelling with data: step by step
+
+The following plots will be used to demonstrate the idea of storytelling with data.
+
+### Load the data
+
+We will load fisheries data that was used for TidyTuesday. This data was originally from Our World in Data.
+
+```{r}
+#Load fisheries data
+all_countries <- read_csv(here("./data/fisheries_data.csv"), show_col_types = FALSE) %>% 
+  #Remove unwanted country codes (NA or codes that represent summary categories)
+  filter(!is.na(Code) & !(Code %in% c("OWID_CIS", "OWID_WRL"))) %>% 
+  #Rename cols for easier use
+  rename(catch = 4) %>%
+  #Create category to distinguish between China and other countries
+  mutate(China = Entity == "China")
+```
+
+### Plot 1: Very cluttered example
+
+This is the first plot in our set of examples. The plot is (intentionally) very cluttered.
+
+```{r}
+ggplot(data = all_countries) +
+  #Add trend lines for all countries over time
+  #Vary the colour of the line depending on if data is from China or other countries
+  geom_line(aes(x = Year, y = catch, group = Entity,
+                colour = China)) +
+  #Add points for measurements of all countries
+  #Again, we vary the colour between China and others
+  geom_point(aes(x = Year, y = catch,
+                 colour = China), size = 1) +
+  #Add ticks on the x axis every 2 years
+  scale_x_continuous(breaks = seq(1960, 2020, 2)) +
+  #Specify the names of groups in the legend
+  scale_colour_discrete(labels = c("Other", "China")) +
+  #Define the title, subtitle, caption and y axis label
+  labs(y = "Capture fisheries production (metric tons)",
+       title = "Fisheries yield over time",
+       subtitle = "Data since 1960. Production is measured in metric tons per year",
+       caption = "Data: Our World in Data") +
+  #Custom adjustments to the theme
+  theme(panel.background = element_rect(colour = "black"),
+        plot.background = element_rect(colour = "black", size = 0.75),
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        panel.grid.major = element_line(colour = "grey80"),
+        legend.title = element_blank())
+
+#Save the plot
+ggsave(here("./plots/plot_step1.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 2: De-cluttered example
+
+This is the same plot once we have removed the clutter.
+
+```{r}
+
+#Create a new column with catch numbers in million metric tons
+all_countries <- all_countries %>% 
+  mutate(catch_mill = catch/1e+06)
+
+ggplot() +
+  #Draw lines for all countries, with a different colour for China
+  geom_line(data = all_countries,
+            #FIXME: Make a new col catch/1e06 instead of doing it every time!!
+            aes(x = Year, y = catch_mill, group = Entity, colour = China)) +
+  #Add text at the end of each line specifying if it is China or Other
+  geom_text(data = filter(all_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = Entity),
+            colour = "#00bfc4", hjust = -0.25) +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "Other"),
+            colour = "#f9766e", hjust = -0.25) +
+  #Remove clipping so that labels can occur past the extent of the axes
+  coord_cartesian(clip = "off") +
+  #Reduce the number of ticks on the x axis
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Use more concise titles and axis labels
+  labs(y = "Fisheries production (million metric tons)",
+       title = "Fisheries yield over time",
+       caption = "Data: Our World in Data") +
+  #Apply pre-set theme (classic is a good starting point)
+  theme_classic() +
+  #Make custom adjustments to the theme
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 30))
+
+#Save the plot
+ggsave(here("./plots/plot_step2.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 3: Use some pre-attentive traits
+
+Here we use some pre-attentive traits (colour, size, intensity) to focus the attention of the viewer.
+
+```{r}
+ggplot() +
+  #Add a line for all data EXCEPT China
+  geom_line(data = filter(all_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 0.35, colour = "grey75") +
+  #Add a line for China specifically (give it different colour and thickness)
+  #NOTE: We do this so that the China line occurs above the others
+  geom_line(data = filter(all_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  #Add China and Other text as before.
+  #Use the same colour for the lines and text
+  #Similarity of traits makes it clearer to the viewer these are related.
+  geom_text(data = filter(all_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = Entity),
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "Other"),
+            colour = "grey75", hjust = -0.25) +
+  #Remove clipping so text can pass the axis limits.
+  coord_cartesian(clip = "off") +
+  #Reduce number of breaks on x axis
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Specify title/caption and axis labels
+  labs(y = "Fisheries production (million metric tons)",
+       title = "Fisheries yield over time",
+       caption = "Data: Our World in Data") +
+  #Apply pre-set theme
+  theme_classic() +
+  #Custom theme adjustments.
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 30))
+
+#Save the plot
+ggsave(here("./plots/plot_step3.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 4: Too much colour!
+
+This plot uses a pre-attentive trait (colour) excessively, which makes it less effective.
+
+```{r}
+ggplot() +
+  #Add line for other countries first
+  #Colour of lines differs for every country!
+  #That's way too much!
+  geom_line(data = filter(all_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, colour = Entity),
+            size = 0.35) +
+  #Add line for China above others
+  geom_line(data = filter(all_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  #Add text for China and Others
+  geom_text(data = filter(all_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = Entity),
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "Other"),
+            colour = "black", hjust = -0.25) +
+  #Removing clipping
+  coord_cartesian(clip = "off") +
+  #Fewer ticks on x
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Title/caption and axis labels
+  labs(y = "Fisheries production (million metric tons)",
+       title = "Fisheries yield over time",
+       caption = "Data: Our World in Data") +
+  #Pre-set theme
+  theme_classic() +
+  #Custom theme adjustments
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 30))
+
+#Save plot
+ggsave(here("./plots/plot_step4.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 5: Using text (ineffectively)
+
+In this plot, we add text to make the conclusions from the plot clearer. However, in this case we don't use alignment or straight lines so the plot is very cluttered.
+
+```{r}
+ggplot() +
+  #Add lines and legend text in the same way as above
+  geom_line(data = filter(all_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 0.35, colour = "grey75") +
+  geom_line(data = filter(all_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = Entity),
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "Other"),
+            colour = "grey75", hjust = -0.25) +
+  #Use geom_segment to add lines pointing to specific important points on the plot
+  geom_segment(data = filter(all_countries, Year == 1995 & Entity == "China"),
+               aes(x = Year - 12, xend = Year,
+                   y = (catch_mill) + 1.5, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(all_countries, Year == 2015 & Entity == "China"),
+               aes(x = Year - 5, xend = Year,
+                   y = (catch_mill) - 4, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(all_countries, Year == 1960 & Entity == "China"),
+               aes(x = Year + 5, xend = Year,
+                   y = (catch_mill) + 3.5, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  #Add large points to make it clear where the lines are pointing
+  geom_point(data = filter(all_countries, Year %in% c(1960, 1995, 2015) & Entity == "China"),
+             aes(x = Year,
+                 y = (catch_mill)),
+             size = 3, colour = "#DC343B") +
+  #Add text at the end of each line
+  #All text is centre aligned
+  geom_text(data = filter(all_countries, Year == 1995 & Entity == "China"),
+            aes(x = Year - 14, y = (catch_mill) + 3,
+                label = "China becomes world's largest\nproducer in 1995"),
+            size = 4, colour = "grey25") +
+  geom_text(data = filter(all_countries, Year == 2015 & Entity == "China"),
+            aes(x = Year - 5, y = (catch_mill) - 5,
+                label = "China's highest yield was\nmore than 16 million metric tons"),
+            size = 4, colour = "grey25") +
+  geom_text(data = filter(all_countries, Year == 1960 & Entity == "China"),
+            aes(x = Year + 7, y = (catch_mill) + 5,
+                label = "China is\n4th largest producer"),
+            size = 4, colour = "grey25") +
+  #Remove clipping
+  coord_cartesian(clip = "off") +
+  #Smaller number of ticks on x
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Add title/caption and axis labels
+  #Notice that we use a title that states our conclusions explicitly
+  labs(y = "Fisheries production (million metric tons)",
+       title = "China has the highest\nfishing yield of any country",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Custom theme adjustments
+  #Notice that plot.title has argument hjust = 0.5. This makes the title centred.
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 30),
+        plot.title = element_text(hjust = 0.5, colour = "grey25"))
+
+#Save plot
+ggsave(here("./plots/plot_step5.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 6: Using text (better)
+
+Here we use straight line (no diagonals) and aligned text to use text more effectively.
+
+```{r}
+ggplot() +
+  #Add lines and legend text as above
+  geom_line(data = filter(all_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 0.35, colour = "grey75") +
+  geom_line(data = filter(all_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = toupper(Entity)),
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(all_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "OTHER"),
+            colour = "grey75", hjust = -0.25) +
+  #Use geom_segment() to create lines pointing to important points in our plot
+  geom_segment(data = filter(all_countries, Year == 1995 & Entity == "China"),
+               aes(x = Year - 12, xend = Year - 12,
+                   y = (catch_mill) + 0.75, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(all_countries, Year == 1995 & Entity == "China"),
+               aes(x = Year - 12.1, xend = Year,
+                   y = (catch_mill), yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(all_countries, Year == 2015 & Entity == "China"),
+               aes(x = Year, xend = Year,
+                   y = (catch_mill) + 2, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(all_countries, Year == 2015 & Entity == "China"),
+               aes(x = Year, xend = Year - 3,
+                   y = (catch_mill) + 2, yend = catch_mill + 2),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(all_countries, Year == 1960 & Entity == "China"),
+               aes(x = Year, xend = Year,
+                   y = catch_mill, yend = catch_mill + 11.25),
+               size = 0.5, colour = "grey25") +
+  #Add points to make it clear where lines are pointing
+  geom_point(data = filter(all_countries, Year %in% c(1960, 1995, 2015) & Entity == "China"),
+             aes(x = Year,
+                 y = (catch_mill)),
+             size = 3, colour = "#DC343B") +
+  #Add text at the end of lines
+  #NOTE: We use geom_richtext to include text with additional pre-attentive traits
+  #e.g. colour, bold, italic
+  geom_richtext(data = filter(all_countries, Year == 1995 & Entity == "China"),
+                aes(x = Year - 17, y = (catch_mill) + 2.5,
+                    label = "<span style='color:#DC343B'>**1995**</span><br>China becomes<br>largest producer"),
+                size = 4, colour = "grey25", hjust = 0,
+                label.colour = NA, fill = NA) +
+  geom_richtext(data = filter(all_countries, Year == 2015 & Entity == "China"),
+                aes(x = Year - 15, y = (catch_mill) + 2.5,
+                    label = "<span style='color:#DC343B'>**2015**</span><br>China catches over<br>**16 <i>million</i> tons**<br>of seafood"),
+                size = 4, colour = "grey25", hjust = 0,
+                label.colour = NA, fill = NA) +
+  geom_richtext(data = filter(all_countries, Year == 1960 & Entity == "China"),
+                aes(x = Year - 0.5, y = (catch_mill) + 13,
+                    label = "<span style='color:#DC343B'>**1960**</span><br>China is world's<br>4th largest producer"),
+                size = 4, colour = "grey25", hjust = 0,
+                label.colour = NA, fill = NA) +
+  #Remove clipping
+  coord_cartesian(clip = "off") +
+  #Fewer ticks on x axis
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Extend y axis to include more space for text
+  scale_y_continuous(limits = c(0, 20)) +
+  #Add title/caption and axis labels
+  #Notice that we use ** around our title.
+  #This allows us to make the text bold using {ggtext}
+  labs(y = "Fisheries production (million metric tons)",
+       title = "**China has the highest fishing yield of any country**",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Custom theme changes
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text = element_text(colour = "grey25", size = 12),
+        axis.title.y = element_text(colour = "grey25", size = 13,
+                                    margin = margin(r = 7)),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 35),
+        #Notice we make the title a markdown object (rather than text)
+        #This allows us to use ** for bold (and add other pre-attentive traits)
+        plot.title = element_markdown(hjust = 0, colour = "grey25", margin = margin(b = 15)),
+        plot.caption = element_text(hjust = 0))
+
+#Save plot
+ggsave(here("./plots/plot_step6.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 7: Bar graph example (a slight detour)
+
+To demonstrate the idea of prime-real estate in the top left corner, we create a bar graph of just the top 10 countries in 2018. This plot is ok, but it doesn't take full advantage of the way people read (tend to start in the top left).
+
+Firstly, we need to use {dplyr} to just extract data for the top countries.
+
+```{r}
+
+#Extract data for only the top 10 producers in 2018
+top_countries_2018 <- all_countries %>%
+  filter(Year == 2018) %>%
+  arrange(desc(catch_mill)) %>%
+  slice(1:10)
+
+```
+
+Now we can plot this data in a bar graph
+
+```{r}
+
+ggplot(data = top_countries_2018) +
+  #Use geom_col() rather than geom_bar() because our y axis is not count data
+  #Bars have a different fill colour for China and others.
+  geom_col(aes(x = Entity, y = catch_mill, fill = China)) +
+  #Also add the exact value corresponding to each bar
+  geom_text(aes(x = Entity, y = catch_mill - 0.6, label = round(catch_mill, 1)),
+            colour = "white") +
+  #Use geom_richtext() to add some additional conclusions to our plot
+  #Notice that we create an HTML span object to give the text China
+  #Different pre-attentive traits to the rest of the text.
+  geom_richtext(aes(x = "India", y = 12,
+                    label = "<span style='color:#DC343B; font-size:15pt'>**China**</span> caught twice<br>as much seafood as any other country"),
+                hjust = 0, label.color = NA, fill = NA) +
+  #Specify the colour scale of our bars (grey for other, red for China)
+  scale_fill_manual(values = c("grey75", "#DC343B")) +
+  #Specify the title/caption and axis labels
+  #Again, notice that we are using the span object to highlight the word China
+  labs(y = "Fisheries production (million metric tons)",
+       title = "<span style='color:#DC343B; font-size:15pt'>**China**</span> was the most productive fishing nation in 2018",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #CUstom theme adjustments
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text = element_text(colour = "grey25", size = 9),
+        axis.title.y = element_text(colour = "grey25", size = 13,
+                                    margin = margin(r = 7)),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 15),
+        #Again, we use element_markdown so that it understands the markdown language
+        #We wrote in the title.
+        plot.title = element_markdown(hjust = 0, colour = "grey25", margin = margin(b = 15)),
+        plot.caption = element_text(hjust = 0))
+
+#Save plot
+ggsave(here("./plots/plot_step7.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 8: A better bar graph example
+
+Here we use the same data, but we order it and flip the axes so that the key data (China) is at the top!
+
+```{r}
+
+#Use the forcats package to change the order of factor levels to match the fishing yield
+top_countries_2018 <- top_countries_2018 %>% 
+  #We also change entity to be uppercase (often looks cleaner)
+  mutate(Entity = forcats::fct_reorder(.f = toupper(Entity), .x = catch_mill, .desc = FALSE))
+
+ggplot(data = top_countries_2018) +
+  #Flip the axes (x axis on bottom, y axis on the top)
+  #NOTE: We still code the other sections the same (e.g. we still put entity on x)
+  coord_flip() +
+  #Create bar graph using geom_col()
+  geom_col(aes(x = Entity, y = catch_mill, fill = China)) +
+  #Add text to each bar
+  geom_text(aes(x = Entity, y = catch_mill - 0.6, label = round(catch_mill, 1)),
+            colour = "white") +
+  #Add our additional text
+  geom_richtext(aes(x = "PERU", y = 8,
+                    label = "<span style='color:#DC343B; font-size:15pt'>**China**</span> caught twice<br>as much seafood as any other country"),
+                hjust = 0, label.color = NA, fill = NA) +
+  #Specify the colour of the different groups (China or Other)
+  scale_fill_manual(values = c("grey75", "#DC343B")) +
+  #Move the y axis to the other side.
+  #When the coordinates are flipped, this will mean it occurs at the top.
+  scale_y_continuous(position = "right",
+                     limits = c(0, 15),
+                     breaks = seq(0, 15, 5),
+                     expand = c(0, 0)) +
+  #Specify title/subtitle and caption
+  #Again, notice the use of markdown language.
+  labs(title = "<span style='color:#DC343B; font-size:15pt'>**China**</span> was the most productive fishing nation in 2018",
+       subtitle = "Fisheries production (million metric tons)",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Use custom theme changes
+  theme(legend.position = "none",
+        plot.title = element_markdown(hjust = 0),
+        plot.subtitle = element_text(hjust = 0),
+        plot.caption = element_text(hjust = 0),
+        axis.text.y = element_text(colour = "black", size = 12),
+        axis.text.x = element_text(colour = "black", size = 12),
+        axis.title = element_blank(),
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.margin = margin(t = 20, b = 20, l = 20, r = 20))
+
+#Save plot
+ggsave(here("./plots/plot_step8.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 9: A counter-example
+
+To demonstrate the importance of the top-left of the plot, what does it look like if we reverse the order of the factor (i.e. China occurs at the bottom).
+
+```{r}
+
+#Use the forcats package to change the order of factor levels to match the fishing yield
+top_countries_2018 <- top_countries_2018 %>% 
+  #We also change entity to be uppercase (often looks cleaner)
+  mutate(Entity = forcats::fct_reorder(.f = toupper(Entity), .x = catch, .desc = TRUE))
+
+#THIS PLOT IS EXACTLY THE SAME AS ABOVE
+ggplot(data = top_countries_2018) +
+  coord_flip() +
+  geom_col(aes(x = Entity, y = catch_mill, fill = China)) +
+  geom_text(aes(x = Entity, y = catch_mill - 0.6, label = round(catch_mill, 1)),
+            colour = "white") +
+  geom_richtext(aes(x = "PERU", y = 8,
+                    label = "<span style='color:#DC343B; font-size:15pt'>**China**</span> caught twice<br>as much seafood as any other country"),
+                hjust = 0, label.color = NA, fill = NA) +
+  scale_fill_manual(values = c("grey75", "#DC343B")) +
+  scale_y_continuous(position = "right",
+                     limits = c(0, 15),
+                     breaks = seq(0, 15, 5),
+                     expand = c(0, 0)) +
+  labs(title = "<span style='color:#DC343B; font-size:15pt'>**China**</span> was the most productive fishing nation in 2018",
+       subtitle = "Fisheries production (million metric tons)",
+       caption = "Data: Our World in Data") +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_markdown(hjust = 0),
+        plot.subtitle = element_text(hjust = 0),
+        plot.caption = element_text(hjust = 0),
+        axis.text.y = element_text(colour = "black", size = 12),
+        axis.text.x = element_text(colour = "black", size = 12),
+        axis.title = element_blank(),
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.margin = margin(t = 20, b = 20, l = 20, r = 20))
+
+#Save plot
+ggsave(here("./plots/plot_step9.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 10: Summarising and subsetting data
+
+Going back to our original line graph! To make the plot more accessible, we can reduce the amount of data we present and provide summary statistics to make it easier to read.
+
+We will do this in two steps:
+1. Only present trends for the 10 biggest fishing nations in 2018 (same subset as used for the bar graph, but showing all years)
+2. Create a line showing the mean fishing yield of countries besides China.
+
+```{r}
+
+#Identify top producers as of 2018
+top_Codes <- all_countries %>%
+  filter(Year == 2018) %>%
+  arrange(desc(catch_mill)) %>%
+  slice(1:10) %>%
+  pull(Code)
+
+#Filter out data for top countries only
+top_countries <- all_countries %>%
+  filter(Code %in% top_Codes)
+
+## Create an additional column that is the average of all top countries EXCEPT China
+other_countries_avg <- top_countries %>%
+  filter(Entity != "China") %>%
+  group_by(Year) %>%
+  summarise(mean = mean(catch_mill, na.rm = TRUE))
+
+```
+
+```{r}
+
+ggplot() +
+  #Add lines for China
+  #This time, use data from top countries only
+  geom_line(data = filter(top_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 0.35, colour = "grey75", alpha = 0.65) +
+  #Add line showing the average of the other top countries (excluding China)
+  #NOTE: We do this BEFORE adding data from China so that the line for China
+  #Will appear at the front (i.e. it will be most prominent)
+  #This average line is more important that the lines for individual countries
+  #So we use some pre-attentive traits (size) to emphasize it
+  geom_line(data = other_countries_avg,
+            aes(x = Year, y = mean),
+            size = 1, colour = "grey75") +
+  #Add line for China. This will be in front of all other lines
+  geom_line(data = filter(top_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  #Add text labels as before
+  geom_text(data = filter(top_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = toupper(Entity)),
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(top_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "MEAN\nOTHER"),
+            colour = "grey75", hjust = -0.25) +
+  #Add lines, points and text to highlight key parts of the plot
+  geom_segment(data = filter(top_countries, Year == 1995 & Entity == "China"),
+               aes(x = Year - 12, xend = Year - 12,
+                   y = (catch_mill) + 0.75, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(top_countries, Year == 1995 & Entity == "China"),
+               aes(x = Year - 12.1, xend = Year,
+                   y = (catch_mill), yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(top_countries, Year == 2015 & Entity == "China"),
+               aes(x = Year, xend = Year,
+                   y = (catch_mill) + 2, yend = catch_mill),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(top_countries, Year == 2015 & Entity == "China"),
+               aes(x = Year, xend = Year - 3,
+                   y = (catch_mill) + 2, yend = catch_mill + 2),
+               size = 0.5, colour = "grey25") +
+  geom_segment(data = filter(top_countries, Year == 1960 & Entity == "China"),
+               aes(x = Year, xend = Year,
+                   y = catch_mill, yend = catch_mill + 11.25),
+               size = 0.5, colour = "grey25") +
+  geom_point(data = filter(top_countries, Year %in% c(1960, 1995, 2015) & Entity == "China"),
+             aes(x = Year,
+                 y = (catch_mill)),
+             size = 3, colour = "#DC343B") +
+  geom_richtext(data = filter(top_countries, Year == 1995 & Entity == "China"),
+                aes(x = Year - 17, y = (catch_mill) + 2.5,
+                    label = "<span style='color:#DC343B'>**1995**</span><br>China becomes<br>largest producer"),
+                size = 4, colour = "grey25", hjust = 0,
+                label.colour = NA, fill = NA) +
+  geom_richtext(data = filter(top_countries, Year == 2015 & Entity == "China"),
+                aes(x = Year - 15, y = (catch_mill) + 2.5,
+                    label = "<span style='color:#DC343B'>**2015**</span><br>China catches over<br>**16 <i>million</i> tons**<br>of seafood"),
+                size = 4, colour = "grey25", hjust = 0,
+                label.colour = NA, fill = NA) +
+  geom_richtext(data = filter(top_countries, Year == 1960 & Entity == "China"),
+                aes(x = Year - 0.5, y = (catch_mill) + 13,
+                    label = "<span style='color:#DC343B'>**1960**</span><br>China is world's<br>4th largest producer"),
+                size = 4, colour = "grey25", hjust = 0,
+                label.colour = NA, fill = NA) +
+  #Remove clipping
+  coord_cartesian(clip = "off") +
+  #Reduce number of ticks on x axis
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Extend y axis scale to allow more space for text
+  scale_y_continuous(limits = c(0, 20)) +
+  #Specify title and axis labels
+  labs(y = "Fisheries production (million metric tons)",
+       title = "**China has the highest fishing yield of any country**",
+       subtitle = "Countries with 10 highest fishing yields (as of 2018)",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Custom theme changes
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text = element_text(colour = "grey25", size = 12),
+        axis.title.y = element_text(colour = "grey25", size = 13,
+                                    margin = margin(r = 7)),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 35),
+        plot.title = element_markdown(hjust = 0, colour = "grey25"),
+        plot.subtitle = element_markdown(hjust = 0, colour = "grey25", margin = margin(b = 15)),
+        plot.caption = element_text(hjust = 0))
+
+#Save plot
+ggsave(here("./plots/plot_step10.png"), height = 16, width = 22, units = "cm")
+```
+
+### Plot 11: Example of an inaccessible plot
+
+Accessibility means that a plot should be inclusive (i.e. usable by as many people as possible). This means we want to avoid unnecessary complexity that might make it difficult to interpret for people without expert knowledge on the topic.
+
+This plot is an example of a plot that is NOT accessible.
+
+```{r}
+ggplot() +
+  #Add lines like before (with average for other countries)
+  geom_line(data = filter(top_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 0.35, colour = "grey75", alpha = 0.65) +
+  geom_line(data = other_countries_avg,
+            aes(x = Year, y = mean),
+            size = 1, colour = "grey75") +
+  geom_line(data = filter(top_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  #Add text legend
+  #Notice that we use an acronym to describe China.
+  #Acronyms are often inaccessible!!
+  geom_text(data = filter(top_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill),
+            label = "PRC",
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(top_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "MEAN\nOTHER"),
+            colour = "grey75", hjust = -0.25) +
+  #Prevent clipping
+  coord_cartesian(clip = "off") +
+  #Use abbreviations for years on the x axis
+  #This can make years harder to read for people that aren't used to such abbreviations
+  scale_x_continuous(breaks = seq(1960, 2020, 10),
+                     labels = paste0("'", c(seq(60, 90, 10), "00", 10, 20))) +
+  #Put plot on log scale
+  #Sometimes, log scale is necessary; however, it is often very difficult for people
+  #to interpret. Even professional scientists!
+  scale_y_log10() +
+  #Add titles and axes labels
+  #Notice, we use Tg (terra-grams) instead of million metric tons
+  #This means the same thing, but it is much harder for people to interpret!
+  labs(y = "Fisheries production (log<sub>10</sub> Tg)",
+       title = "**PRC has the highest fishing yield of any country**",
+       subtitle = "Countries with 10 highest fishing yields (as of 2018)",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Custom theme changes
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text = element_text(colour = "grey25", size = 12),
+        axis.title.y = element_markdown(colour = "grey25", size = 13,
+                                        margin = margin(r = 7)),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 35),
+        plot.title = element_markdown(hjust = 0, colour = "grey25"),
+        plot.subtitle = element_markdown(hjust = 0, colour = "grey25", margin = margin(b = 15)),
+        plot.caption = element_text(hjust = 0))
+
+#Save plot
+ggsave(here("./plots/plot_step11.png"), height = 16, width = 22, units = "cm")
+```
+
+## Different types of plots
+
+Here I'll give a basic example of how we can create different types of plots in the {ggplot2} plotting library. These major plot types should be suitable for the majority of data visualization tasks.
+
+### Heatmap
+
+A heatmap (or, if we remove colour, a table) is useful for displaying exact values that your viewer can read. This may be useful if your audience wants to know fine details, or if you want to present many different variables at once. But be warned! A table is rarely a good choice for slides. Your audience will not have time to read and process the data.
+
+Here, we will make a table using the {gt} package. See my blog post [here](https://www.liamdbailey.com/post/making-beautiful-tables-with-gt/) for a more detailed walk-through of {gt}.
+
+Here is a basic example of a table using {gt}.
+
+```{r}
+mtcars %>% 
+  tibble::rownames_to_column(var = "car") %>%
+  select(car, mpg) %>%
+  arrange(desc(mpg)) %>%
+  slice(1:10) %>% 
+  gt()
+```
+
+...and a more advanced example where we make the table more attractive.
+
+```{r}
+#First, we wrangle the data using dplyr
+mtcars %>%
+  tibble::rownames_to_column(var = "car") %>%
+  select(car, mpg) %>%
+  arrange(desc(mpg)) %>%
+  slice(1:10) %>%
+  #Now we start making our gt table
+  gt() %>%
+  #Change the column names to something more informative
+  cols_label(car = "",
+             mpg = "Efficiency (mpg)") %>%
+  #Give the table a title and caption
+  tab_header(title = md("Toyota Corolla is the most efficient car model available")) %>%
+  tab_source_note(source_note = "Data: mtcars data in R") %>%
+  #Specify the style of the column headers
+  #cells_column_labels() is used to refer to the column headers
+  tab_style(
+    locations = cells_column_labels(columns = everything()),
+    style     = list(
+      cell_borders(sides = "bottom", weight = px(3)),
+      cell_text(weight = "bold")
+    )
+  ) %>%
+  #Specify the style of the table title
+  tab_style(
+    locations = cells_title(groups = "title"),
+    style     = list(
+      cell_text(weight = "bold", size = 24)
+    )
+  ) %>%
+  #Colour the cells showing fuel efficiency (the mpg column)
+  #By colouring cells we create a heatmap
+  data_color(columns = c(mpg),
+             colors = c("#8b0000", "#50C878")) %>%
+  #Make column headers in capital letters
+  opt_all_caps() %>%
+  #Use the Chivo font from Google fonts
+  opt_table_font(
+    font = list(
+      google_font("Chivo"),
+      default_fonts()
+    )
+  ) %>%
+  #Specify the width of each column
+  cols_width(c(car) ~ px(150),
+             c(mpg) ~ px(200)) %>%
+  #Custom theme options
+  tab_options(
+    column_labels.border.top.width = px(3),
+    column_labels.border.top.color = "transparent",
+    table.border.top.color = "transparent",
+    table.border.bottom.color = "transparent",
+    data_row.padding = px(3),
+    source_notes.font.size = 12,
+    heading.align = "left") %>% 
+  #Save as an image
+  gtsave(filename = here("./plots/gt_example.png"))
+```
+
+### Scatterplot
+
+To create a scatterplot we use the `geom_point()` function.
+
+Here is a basic example.
+
+```{r}
+ggplot(data = mtcars) +
+  geom_point(aes(x = mpg, y = disp)) +
+  theme_classic()
+```
+
+...and a more advanced example.
+
+```{r}
+#Create plotting data
+#We turn cyl into a factor so we can use it to adjust colours
+mtcars_plot <- mtcars %>% 
+  mutate(cyl = as.factor(cyl))
+
+#Create a colour palette to use
+my_palette <- c("#000080", "#29ab87", "#990000")
+
+#Create data for text labels
+label_data <- mtcars_plot %>% 
+  group_by(cyl) %>%
+  summarise(mpg = mean(range(mpg)),
+            disp = mean(range(disp))) %>%
+  mutate(colour = my_palette)
+
+ggplot() +
+  geom_point(data = mtcars_plot, aes(x = mpg, y = disp, fill = cyl),
+             shape = 21, size = 3, colour = "black") +
+  geom_richtext(data = label_data,
+                aes(x = mpg + c(3, 7, 10), y = disp + c(30, 0, 0),
+                    label = paste("<span style='color:", colour, "'>", cyl, "cylinder engine</span>")),
+                label.colour = NA, fill = NA, fontface = "bold") +
+  labs(title = "**4 cylinder engines are more efficienct**",
+       x = "Fuel efficiency (mpg)", y = "Displacement of engine") +
+  scale_fill_manual(values = my_palette) +
+  theme_classic() +
+  theme(legend.position = "none",
+        plot.title = element_markdown(),
+        axis.text = element_text(colour = "black", size = 12),
+        axis.title.y = element_text(colour = "black", size = 15, margin = margin(r = 10)),
+        axis.title.x = element_text(colour = "black", size = 15, margin = margin(t = 10)),
+        plot.margin = margin(t = 5, b = 5, l = 10, r = 20))
+
+ggsave(filename = here("./plots/scatter_example.png"))
+```
+
+### Line graph
+
+A line graph is used to show trends in ordered data (usually over time). We have used a line graph in our step-by-step examples above, but we will recreate a simple and complex example below.
+
+A simple example:
+
+```{r}
+#Use a subset of fishing data for Afghanistan
+example_data <- all_countries %>% 
+  filter(Code == "AFG")
+
+ggplot(data = example_data) +
+  geom_line(aes(x = Year, y = catch)) +
+  theme_classic()
+```
+
+...and a more advanced example (using an example from above).
+
+```{r}
+ggplot() +
+  #Add lines for China
+  #This time, use data from top countries only
+  geom_line(data = filter(top_countries, Entity != "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 0.35, colour = "grey75", alpha = 0.65) +
+  #Add line showing the average of the other top countries (excluding China)
+  #NOTE: We do this BEFORE adding data from China so that the line for China
+  #Will appear at the front (i.e. it will be most prominent)
+  #This average line is more important that the lines for individual countries
+  #So we use some pre-attentive traits (size) to emphasize it
+  geom_line(data = other_countries_avg,
+            aes(x = Year, y = mean),
+            size = 1, colour = "grey75") +
+  #Add line for China. This will be in front of all other lines
+  geom_line(data = filter(top_countries, Entity == "China"),
+            aes(x = Year, y = catch_mill, group = Entity),
+            size = 1, colour = "#DC343B") +
+  #Add text labels as before
+  geom_text(data = filter(top_countries, Year == 2018 & Entity == "China"),
+            aes(x = 2018, y = catch_mill, label = toupper(Entity)),
+            colour = "#DC343B", fontface = "bold", hjust = -0.25) +
+  geom_text(data = filter(top_countries, Year == 2018 & Entity != "China"),
+            aes(x = 2018, y = mean(range(catch)/1e+06), label = "MEAN\nOTHER"),
+            colour = "grey75", hjust = -0.25) +
+  #Remove clipping
+  coord_cartesian(clip = "off") +
+  #Reduce number of ticks on x axis
+  scale_x_continuous(breaks = seq(1960, 2020, 10)) +
+  #Extend y axis scale to allow more space for text
+  scale_y_continuous(limits = c(0, 20)) +
+  #Specify title and axis labels
+  labs(y = "Fisheries production (million metric tons)",
+       title = "**China has the highest fishing yield of any country**",
+       subtitle = "Countries with 10 highest fishing yields (as of 2018)",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Custom theme changes
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text = element_text(colour = "grey25", size = 12),
+        axis.title.y = element_text(colour = "grey25", size = 13,
+                                    margin = margin(r = 7)),
+        plot.margin = margin(t = 15, b = 15, l = 15, r = 35),
+        plot.title = element_markdown(hjust = 0, colour = "grey25"),
+        plot.subtitle = element_markdown(hjust = 0, colour = "grey25", margin = margin(b = 15)),
+        plot.caption = element_text(hjust = 0))
+
+ggsave(filename = here("./plots/line_example.png"))
+```
+
+### Slope graph
+
+A slope graph is a specific subset of line graphs where we only have 2 time points. We have not covered this in the slides, but I will provide a simple example below.
+
+```{r}
+#Comparing changes in fishing yield between Japan and China
+slope_data <- top_countries %>% 
+  filter((Year == 1960 | Year == 2018) & Entity %in% c("China", "Japan"))
+
+ggplot(data = slope_data) +
+  geom_line(aes(x = Year, y = catch_mill, colour = Code), size = 1) +
+  geom_point(aes(x = Year, y = catch_mill, colour = Code), size = 3) +
+  geom_text(data = filter(slope_data, Year == 2018),
+            aes(x = Year + 5, y = catch_mill, label = toupper(Entity), colour = Code)) +
+  labs(y = "Fishing production (million metric tons)",
+       x = "") +
+  scale_colour_manual(values = c("#DC343B", "grey75")) +
+  theme_classic() +
+  theme(legend.position = "none")
+
+ggsave(here("./plots/slope_example.png"))
+```
+
+### Bar graph
+
+This has also been covered in our step-by-step example above, but I will show a simple example of the difference between `geom_bar()` and `geom_col()`.
+
+```{r}
+ggplot(data = mtcars) +
+  #geom_bar will extract count information from your data
+  geom_bar(aes(x = cyl), colour = "black") +
+  theme_classic()
+```
+
+```{r}
+plot_data <- mtcars %>% 
+  tibble::rownames_to_column(var = "Model") %>% 
+  arrange(desc(mpg)) %>% 
+  slice(1:10)
+
+ggplot(data = plot_data) +
+  #With geom_col the y axis can be anything we specify
+  geom_col(aes(x = Model, y = mpg), colour = "black") +
+  theme_classic()
+```
+
+...a more advanced example from above.
+
+```{r}
+
+#Use the forcats package to change the order of factor levels to match the fishing yield
+top_countries_2018 <- top_countries_2018 %>% 
+  #We also change entity to be uppercase (often looks cleaner)
+  mutate(Entity = forcats::fct_reorder(.f = toupper(Entity), .x = catch_mill, .desc = FALSE))
+
+ggplot(data = top_countries_2018) +
+  #Flip the axes (x axis on bottom, y axis on the top)
+  #NOTE: We still code the other sections the same (e.g. we still put entity on x)
+  coord_flip() +
+  #Create bar graph using geom_col()
+  geom_col(aes(x = Entity, y = catch_mill, fill = China)) +
+  #Add text to each bar
+  geom_text(aes(x = Entity, y = catch_mill - 0.6, label = round(catch_mill, 1)),
+            colour = "white") +
+  #Add our additional text
+  geom_richtext(aes(x = "PERU", y = 8,
+                    label = "<span style='color:#DC343B; font-size:15pt'>**China**</span> caught twice<br>as much seafood as any other country"),
+                hjust = 0, label.color = NA, fill = NA) +
+  #Specify the colour of the different groups (China or Other)
+  scale_fill_manual(values = c("grey75", "#DC343B")) +
+  #Move the y axis to the other side.
+  #When the coordinates are flipped, this will mean it occurs at the top.
+  scale_y_continuous(position = "right",
+                     limits = c(0, 15),
+                     breaks = seq(0, 15, 5),
+                     expand = c(0, 0)) +
+  #Specify title/subtitle and caption
+  #Again, notice the use of markdown language.
+  labs(title = "<span style='color:#DC343B; font-size:15pt'>**China**</span> was the most productive fishing nation in 2018",
+       subtitle = "Fisheries production (million metric tons)",
+       caption = "Data: Our World in Data") +
+  #Use pre-set theme
+  theme_classic() +
+  #Use custom theme changes
+  theme(legend.position = "none",
+        plot.title = element_markdown(hjust = 0),
+        plot.subtitle = element_text(hjust = 0),
+        plot.caption = element_text(hjust = 0),
+        axis.text.y = element_text(colour = "black", size = 12),
+        axis.text.x = element_text(colour = "black", size = 12),
+        axis.title = element_blank(),
+        axis.line.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        plot.margin = margin(t = 20, b = 20, l = 20, r = 20))
+
+#Save plot
+ggsave(here("./plots/bar_example.png"), height = 16, width = 22, units = "cm")
+```
+
+### Square area plot
+
+This is a more uncommon plot can can be useful to display large proportional differences. We'll give one example here using covid data from Virginia (USA).
+
+The biggest challenge for creating a square area plot is getting the data in the right format. In this example we know the percentage of vaccinated people that contracted covid (2.4%), and the percentage vaccinated people that died (0.02%).
+
+```{r, fig.height = 10, fig.width=10}
+#Create a data frame representing all vaccinated people
+#We create a 100x100 grid (i.e. 10000 cells)
+all_df <- expand.grid(x = 1:100, y = 1:100) %>% 
+  #Create a new variable group.
+  #First, we give the top 2 tiles the value "DIED"
+  #For the 256 tiles in the top left of the grid that are not assigned "DIED",
+  #give the value "CASE". 256 tiles represents a square of ~ 2.4% (10000*0.024)
+  #All the rest of the tiles are given the value "VAXED"
+  mutate(group = case_when(x == 1 & y %in% 99:100 ~ "DIED",
+                           x %in% 1:16 & y %in% (100 - 16):100 ~ "CASE",
+                           TRUE ~ "VAXED"))
+
+#Create subset of each group for plotting purposes
+cases <- all_df %>% 
+  filter(group == "CASE")
+
+deaths <- all_df %>% 
+  filter(group == "DIED")
+
+ggplot() +
+  #Use the geom_tile() function to create grid
+  geom_tile(data = all_df, aes(x = x, y = y, fill = group), colour = "white") +
+  scale_fill_manual(values = c("grey65", "red", "grey85")) +
+  #Create thicker white lines around each group for greater effect
+  geom_segment(data = cases,
+               aes(x = min(x) - 0.5, xend = max(x) + 0.5,
+                   y = min(y) - 0.5, yend = min(y) - 0.5),
+               size = 0.75, colour = "white",
+               lineend = "round", linejoin = "round") +
+  geom_segment(data = cases,
+               aes(x = max(x) + 0.5, xend = max(x) + 0.5,
+                   y = min(y) - 0.5, yend = max(y) + 0.5),
+               size = 0.75, colour = "white") +
+  geom_segment(data = deaths,
+               aes(x = min(x) - 0.5, xend = max(x) + 0.5,
+                   y = min(y) - 0.5, yend = min(y) - 0.5),
+               size = 0.75, colour = "white",
+               lineend = "round", linejoin = "round") +
+  geom_segment(data = deaths,
+               aes(x = max(x) + 0.5, xend = max(x) + 0.5,
+                   y = min(y) - 0.5, yend = max(y) + 0.5),
+               size = 0.75, colour = "white") +
+  geom_richtext(aes(x = 45, y = 10, label = "6 million vaccinated"), size = 10, fontface = "bold",
+                fill = NA, label.color = NA, hjust = 0) +
+  geom_richtext(aes(x = 16, y = 90, label = "2.4% contract<br>covid"),
+                size = 10, fontface = "bold", colour = "white", lineheight = 1,
+                fill = NA, label.color = NA, hjust = 0) +
+  labs(title = "<span>Only </span><span style='color:red'>**0.02%**</span><span> of vaccinated Virginians<br>have died from Covid-19</span>",
+       caption = "<span>Data: Virgina Department of Health</span>") +
+  coord_equal(expand = FALSE) +
+  theme_void() +
+  theme(legend.position = "none",
+        plot.title = element_markdown(lineheight = 1.2, size = 25, margin = margin(b = 10)),
+        plot.subtitle = element_markdown(size = 17),
+        plot.caption = element_markdown(colour = "grey35", size = 10),
+        plot.margin = margin(t = 15, b = 15, r = 15, l = 15),
+        text = element_text())
+
+#Save the plot.
+#NOTE: BE SURE TO SAVE THE PLOT WITH EQUAL WIDTH AND HEIGHT
+ggsave(filename = here("./plots/square_area_example.png"),
+       width = 10, height = 10, dpi = 300)
+```
+
+## Practice example
+
+The three plots below are used as a starting point for our practical examples. Each group will have to use these as a starting point for creating their more purposeful visualization.
+
+### Example 1: Smoking in UK children
+
+```{r}
+plot_data <- read_csv(file = here("./data/UK_smoking.csv"), show_col_types = FALSE) %>% 
+  filter(!is.na(cigarettes_kid)) %>% 
+  group_by(sex, cigarettes_kid) %>% 
+  summarise(total = n(), .groups = "drop")
+
+#Work out percentage that answered never for each sex
+perc_never <- plot_data %>% 
+  group_by(sex) %>% 
+  summarise(perc_never = (total[cigarettes_kid == "Never"]/sum(total)) * 100)
+
+ggplot(data = plot_data) +
+  geom_col(aes(x = 1, y = total, fill = cigarettes_kid),
+           position = position_dodge(width = 1)) +
+  scale_y_continuous(breaks = seq(0, 6000, 500)) +
+  scale_fill_discrete(name = "Cigarettes smoked") +
+  labs(y = "Number of responses",
+       title = "Underage smoking in the UK",
+       subtitle = paste0("'Never' is a more common answer in girls (",
+                         round(perc_never$perc_never[2], 4), "%) than boys (",
+                         round(perc_never$perc_never[1], 4), "%)")) +
+  facet_wrap(facets = ~sex) +
+  theme(plot.title = element_text(size = 20),
+        plot.subtitle = element_text(size = 12, margin = margin(b = 15)),
+        plot.margin = margin(r = 20, l = 20, t = 10, b = 10),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "top")
+
+ggsave(filename = here("./plots/example1.png"))
+```
+
+### Example 2: Body mass in big cats
+
+```{r}
+
+plot_panthera <- read_csv(here("./data/bigcat_data.csv"), show_col_types = FALSE)
+
+ggplot(data = plot_panthera) +
+  #Create point data showing weight of each species
+  geom_point(aes(x = Species, y = Weight), size = 3) +
+  #Add titles and axis labels
+  labs(y = "Average weight of big cats (kg)",
+       title = "Tiger (Panthera tigris) are the heaviest big cat",
+       subtitle = "Snow leopard (Panthera unica) are the lightest big cat") +
+  #USe pre-set theme
+  theme_classic() +
+  #Add custom theme changes
+  theme(panel.grid.major = element_line(size = 0.2, colour = "grey"),
+        axis.text.x = element_text(angle = 90))
+
+#Save plot
+ggsave(filename = here("./plots/example2.png"))
+```
+
+### Example 3: GHG Emissions of countries
+
+Read in GHG emissions data
+
+```{r}
+ghg_data <- read_csv(here("./data/ghg_emissions.csv"), show_col_types = FALSE) %>% 
+  rename(ghg_emissions = 3)
+
+#Show top 20
+ghg_data_top20 <- ghg_data %>% 
+  arrange(desc(ghg_emissions)) %>% 
+  slice(1:20) %>% 
+  mutate(Code = forcats::fct_reorder(.f = Code, .x = ghg_emissions, .desc = FALSE)) %>% 
+  mutate(prop = ghg_emissions / sum(ghg_emissions) *100) %>%
+  mutate(ypos = cumsum(prop) - 0.5*prop )
+
+#Try making a boxplot
+ggplot(data = ghg_data_top20) +
+  geom_col(aes(x = 1, y = prop, fill = Code), colour = "black") +
+  geom_text_repel(aes(x = 1.45, y = ypos, label = paste(Code, round(ghg_emissions, 2))),
+                  fontface = "bold", colour = "black", 
+                  nudge_x = 0.15) +
+  coord_polar("y", start=0) +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_continuous(expand = c(0, 0)) +
+  labs(title = "Top 20 GHG emitters per capita",
+       subtitle = "Data includes domestic aviation data",
+       data = "Data: Our World in Data") +
+  theme_void() +
+  theme(legend.title = element_blank())
+
+ggsave(filename = here("./plots/example3.png"))
+```
+
+
