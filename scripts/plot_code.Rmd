@@ -1095,7 +1095,7 @@ The three plots below are used as a starting point for our practical examples. E
 ### Example 1: Smoking in UK children
 
 ```{r}
-plot_data <- read_csv(file = here("./data/UK_smoking.csv"), show_col_types = FALSE) %>% 
+plot_data <- read_csv(file = here("./data/practice_example1_data.csv"), show_col_types = FALSE) %>% 
   filter(!is.na(cigarettes_kid)) %>% 
   group_by(sex, cigarettes_kid) %>% 
   summarise(total = n(), .groups = "drop")
@@ -1131,7 +1131,7 @@ ggsave(filename = here("./plots/practice_example1.png"))
 
 ```{r}
 
-plot_panthera <- read_csv(here("./data/bigcat_data.csv"), show_col_types = FALSE)
+plot_panthera <- read_csv(here("./data/practice_example2_data.csv"), show_col_types = FALSE)
 
 ggplot(data = plot_panthera) +
   #Create point data showing weight of each species
@@ -1155,7 +1155,7 @@ ggsave(filename = here("./plots/practice_example2.png"))
 Read in GHG emissions data
 
 ```{r}
-ghg_data <- read_csv(here("./data/ghg_emissions.csv"), show_col_types = FALSE) %>% 
+ghg_data <- read_csv(here("./data/practice_example3_data.csv"), show_col_types = FALSE) %>% 
   rename(ghg_emissions = 3)
 
 #Show top 20
